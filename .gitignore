@@ -1,0 +1,2 @@
+.env          # mantido oculto
+!*.enc        # permite arquivos .enc, como .env.enc

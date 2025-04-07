@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: discord-party-bot
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "bash start.sh"
+    branch: main
+    repo: https://github.com/minorello/discord-party-bot
+    autoDeploy: true
