@@ -2,6 +2,7 @@ import os
 import discord
 from discord.ext import commands
 from discord import app_commands
+from keep_alive import keep_alive  # 👈 Importa o servidor Flask
 
 # Pega o token diretamente das variáveis de ambiente (Render)
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
@@ -109,6 +110,9 @@ class JoinPTView(discord.ui.View):
         overwrites[guild.default_role] = discord.PermissionOverwrite(connect=False)
         voice_channel = await guild.create_voice_channel("PT Temporária", overwrites=overwrites)
         await interaction.response.send_message(f"🔊 Canal de voz criado: {voice_channel.mention}")
+
+# Mantém o bot vivo no Render
+keep_alive()
 
 # Inicia o bot
 bot.run(DISCORD_TOKEN)
