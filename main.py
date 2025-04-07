@@ -1,54 +1,13 @@
 import os
-import base64
-import hashlib
-from cryptography.fernet import Fernet, InvalidToken
-from dotenv import load_dotenv
-
-# Detecta se está rodando no Render
-if os.environ.get("RENDER"):
-    base_dir = os.getcwd()  # No Render, use o diretório atual
-else:
-    base_dir = r"C:\Users\minor\OneDrive\Documents\workspace\key bot disc"
-
-# Função para gerar a chave a partir da senha
-def gerar_chave_da_senha(senha: str) -> bytes:
-    return base64.urlsafe_b64encode(hashlib.sha256(senha.encode()).digest())
-
-# Função para descriptografar um arquivo
-def descriptografar_arquivo(caminho_enc: str, caminho_saida: str, senha: str):
-    chave = gerar_chave_da_senha(senha)
-    fernet = Fernet(chave)
-
-    with open(caminho_enc, 'rb') as file_enc:
-        dados_criptografados = file_enc.read()
-
-    try:
-        dados = fernet.decrypt(dados_criptografados)
-        with open(caminho_saida, 'wb') as file_out:
-            file_out.write(dados)
-        print(f"✅ Descriptografado com sucesso: {caminho_saida}")
-    except InvalidToken:
-        print("❌ Erro: Senha inválida ou arquivo corrompido.")
-        exit(1)
-
-# Descriptografar .env antes de carregar variáveis
-senha = os.getenv("SENHA_ENV")
-if not senha:
-    print("❌ Erro: SENHA_ENV não definida nas variáveis de ambiente.")
-    exit(1)
-
-env_criptografado = os.path.join(base_dir, ".env.enc")
-env_temporario = os.path.join(base_dir, ".env")
-descriptografar_arquivo(env_criptografado, env_temporario, senha)
-
-# Carregar variáveis do .env
-load_dotenv(dotenv_path=env_temporario)
-DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-
-# Importações do Discord após carregar o token
 import discord
 from discord.ext import commands
 from discord import app_commands
+
+# Pega o token diretamente das variáveis de ambiente (Render)
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+if not DISCORD_TOKEN:
+    print("❌ Erro: DISCORD_TOKEN não definido nas variáveis de ambiente.")
+    exit(1)
 
 intents = discord.Intents.default()
 intents.guilds = True
@@ -57,18 +16,15 @@ intents.voice_states = True
 
 bot = commands.Bot(command_prefix="/", intents=intents)
 party_slots = {"EK": None, "ED": None, "MS": None, "RP": None}
-
-voc_emojis = {
-    "EK": "⚔️", "ED": "🧙‍♂️", "MS": "🧙", "RP": "🌽"
-}
+voc_emojis = {"EK": "⚔️", "ED": "🧙‍♂️", "MS": "🧙", "RP": "🌽"}
 
 @bot.event
 async def on_ready():
     await bot.tree.sync()
-    print(f"Bot conectado como {bot.user}")
+    print(f"✅ Bot conectado como {bot.user}")
 
 @bot.tree.command(name="pt", description="Mostra a composição atual da party.")
-async def pt(interaction: discord.Interaction):
+async def show_party(interaction: discord.Interaction):
     status = ""
     for voc, member in party_slots.items():
         emoji = voc_emojis.get(voc, "")
@@ -99,7 +55,7 @@ async def joinparty(interaction: discord.Interaction, voc: app_commands.Choice[s
             party_slots[v] = None
 
     party_slots[voc.value] = user
-    await interaction.response.send_message(f"Você entrou como {voc.value}.")
+    await show_party(interaction)
 
 def create_voc_command(voc_name):
     @bot.tree.command(name=voc_name.lower(), description=f"Entrar como {voc_name}.")
@@ -112,7 +68,7 @@ def create_voc_command(voc_name):
             if u == user:
                 party_slots[v] = None
         party_slots[voc_name] = user
-        await interaction.response.send_message(f"Você entrou como {voc_name}.")
+        await show_party(interaction)
 
 for voc in ["EK", "ED", "MS", "RP"]:
     create_voc_command(voc)
@@ -132,7 +88,13 @@ async def swapvoc(interaction: discord.Interaction, voc: str):
         if u == user:
             party_slots[v] = None
     party_slots[voc] = user
-    await interaction.response.send_message(f"Você mudou para {voc}.")
+    await show_party(interaction)
+
+@bot.tree.command(name="delpt", description="Limpa a party e recomeça do zero.")
+async def delpt(interaction: discord.Interaction):
+    for voc in party_slots:
+        party_slots[voc] = None
+    await interaction.response.send_message("🧹 Party resetada com sucesso!")
 
 class JoinPTView(discord.ui.View):
     @discord.ui.button(label="Join PT", style=discord.ButtonStyle.green)
@@ -140,14 +102,11 @@ class JoinPTView(discord.ui.View):
         guild = interaction.guild
         overwrites = {
             member: discord.PermissionOverwrite(connect=True, speak=True)
-            for member in party_slots.values()
+            for member in party_slots.values() if member
         }
         overwrites[guild.default_role] = discord.PermissionOverwrite(connect=False)
         voice_channel = await guild.create_voice_channel("PT Temporária", overwrites=overwrites)
-        await interaction.response.send_message(f"Canal de voz criado: {voice_channel.mention}")
+        await interaction.response.send_message(f"🔊 Canal de voz criado: {voice_channel.mention}")
 
 # Inicia o bot
 bot.run(DISCORD_TOKEN)
-
-# (Opcional) Apaga o .env temporário após uso (só se não for usar mais)
-# os.remove(env_temporario)
