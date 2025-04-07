@@ -27,7 +27,5 @@ urllib3==2.3.0
 websocket-client==1.8.0
 wheel==0.45.1
 wsproto==1.2.0
-
-# Adicionados para o bot do Discord e ambiente do Render
-discord.py>=2.3.2
-python-dotenv>=1.0.0
+discord.py==2.3.2
+Flask==2.3.3
