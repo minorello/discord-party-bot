@@ -3,31 +3,26 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 
-# Token e servidor de teste
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 if not DISCORD_TOKEN:
     print("❌ Erro: DISCORD_TOKEN não definido nas variáveis de ambiente.")
     exit(1)
 
-GUILD_ID = 420982558080106499
-GUILD = discord.Object(id=GUILD_ID)
-
-# Intents
 intents = discord.Intents.default()
 intents.guilds = True
 intents.guild_messages = True
 intents.voice_states = True
 
-# Bot
 bot = commands.Bot(command_prefix="/", intents=intents)
 party_slots = {"EK": None, "ED": None, "MS": None, "RP": None}
 voc_emojis = {"EK": "⚔️", "ED": "🧙‍♂️", "MS": "🧙", "RP": "🌽"}
+GUILD_ID = 420982558080106499
+GUILD = discord.Object(id=GUILD_ID)
 
 @bot.event
 async def on_ready():
-    synced = await bot.tree.sync(guild=GUILD)
+    await bot.tree.sync(guild=GUILD)
     print(f"✅ Bot conectado como {bot.user}")
-    print(f"🔁 Comandos sincronizados: {[cmd.name for cmd in synced]}")
 
 @bot.tree.command(name="pt", description="Mostra a composição atual da party.", guild=GUILD)
 async def show_party(interaction: discord.Interaction):
@@ -35,7 +30,6 @@ async def show_party(interaction: discord.Interaction):
     for voc, member in party_slots.items():
         emoji = voc_emojis.get(voc, "")
         status += f"**{emoji} {voc}:** {member.mention if member else '🔄 Aguardando membro...'}\n"
-
     if all(party_slots.values()):
         view = JoinPTView()
         await interaction.response.send_message(content=status, view=view)
@@ -63,20 +57,6 @@ async def joinparty(interaction: discord.Interaction, voc: app_commands.Choice[s
     party_slots[voc.value] = user
     await show_party(interaction)
 
-# Comandos de vocação rápida
-for voc_name in ["EK", "ED", "MS", "RP"]:
-    @bot.tree.command(name=voc_name.lower(), description=f"Entrar como {voc_name}.", guild=GUILD)
-    async def voc_command(interaction: discord.Interaction, voc_name=voc_name):
-        user = interaction.user
-        if party_slots[voc_name]:
-            await interaction.response.send_message(f"A vaga de {voc_name} já está preenchida.", ephemeral=True)
-            return
-        for v, u in party_slots.items():
-            if u == user:
-                party_slots[v] = None
-        party_slots[voc_name] = user
-        await show_party(interaction)
-
 @bot.tree.command(name="swapvoc", description="Troque sua vocação na party.", guild=GUILD)
 @app_commands.describe(voc="Nova vocação desejada (EK, ED, MS, RP)")
 async def swapvoc(interaction: discord.Interaction, voc: str):
@@ -99,6 +79,30 @@ async def delpt(interaction: discord.Interaction):
     for voc in party_slots:
         party_slots[voc] = None
     await interaction.response.send_message("🧹 Party resetada com sucesso!", ephemeral=True)
+
+# ✅ Criação dinâmica dos comandos /ek, /ed, /ms, /rp
+async def create_voc_command(voc_name: str):
+    async def command_callback(interaction: discord.Interaction):
+        user = interaction.user
+        if party_slots[voc_name]:
+            await interaction.response.send_message(f"A vaga de {voc_name} já está preenchida.", ephemeral=True)
+            return
+        for v, u in party_slots.items():
+            if u == user:
+                party_slots[v] = None
+        party_slots[voc_name] = user
+        await show_party(interaction)
+
+    command = app_commands.Command(
+        name=voc_name.lower(),
+        description=f"Entrar como {voc_name}.",
+        callback=command_callback,
+        guild=GUILD
+    )
+    bot.tree.add_command(command, guild=GUILD)
+
+for voc in ["EK", "ED", "MS", "RP"]:
+    bot.loop.create_task(create_voc_command(voc))
 
 class JoinPTView(discord.ui.View):
     @discord.ui.button(label="Join PT", style=discord.ButtonStyle.green)
