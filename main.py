@@ -2,29 +2,32 @@ import os
 import discord
 from discord.ext import commands
 from discord import app_commands
-from keep_alive import keep_alive  # 👈 Importa o servidor Flask
 
-# Pega o token diretamente das variáveis de ambiente (Render)
+# Token e servidor de teste
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 if not DISCORD_TOKEN:
     print("❌ Erro: DISCORD_TOKEN não definido nas variáveis de ambiente.")
     exit(1)
 
+GUILD_ID = 420982558080106499
+GUILD = discord.Object(id=GUILD_ID)
+
+# Intents
 intents = discord.Intents.default()
 intents.guilds = True
 intents.guild_messages = True
 intents.voice_states = True
 
+# Bot
 bot = commands.Bot(command_prefix="/", intents=intents)
 party_slots = {"EK": None, "ED": None, "MS": None, "RP": None}
 voc_emojis = {"EK": "⚔️", "ED": "🧙‍♂️", "MS": "🧙", "RP": "🌽"}
-GUILD_ID = 420982558080106499
-GUILD = discord.Object(id=GUILD_ID)
 
 @bot.event
 async def on_ready():
-    await bot.tree.sync(guild=GUILD)
+    synced = await bot.tree.sync(guild=GUILD)
     print(f"✅ Bot conectado como {bot.user}")
+    print(f"🔁 Comandos sincronizados: {[cmd.name for cmd in synced]}")
 
 @bot.tree.command(name="pt", description="Mostra a composição atual da party.", guild=GUILD)
 async def show_party(interaction: discord.Interaction):
@@ -60,9 +63,10 @@ async def joinparty(interaction: discord.Interaction, voc: app_commands.Choice[s
     party_slots[voc.value] = user
     await show_party(interaction)
 
-def create_voc_command(voc_name):
+# Comandos de vocação rápida
+for voc_name in ["EK", "ED", "MS", "RP"]:
     @bot.tree.command(name=voc_name.lower(), description=f"Entrar como {voc_name}.", guild=GUILD)
-    async def voc_command(interaction: discord.Interaction):
+    async def voc_command(interaction: discord.Interaction, voc_name=voc_name):
         user = interaction.user
         if party_slots[voc_name]:
             await interaction.response.send_message(f"A vaga de {voc_name} já está preenchida.", ephemeral=True)
@@ -72,9 +76,6 @@ def create_voc_command(voc_name):
                 party_slots[v] = None
         party_slots[voc_name] = user
         await show_party(interaction)
-
-for voc in ["EK", "ED", "MS", "RP"]:
-    create_voc_command(voc)
 
 @bot.tree.command(name="swapvoc", description="Troque sua vocação na party.", guild=GUILD)
 @app_commands.describe(voc="Nova vocação desejada (EK, ED, MS, RP)")
@@ -111,8 +112,4 @@ class JoinPTView(discord.ui.View):
         voice_channel = await guild.create_voice_channel("PT Temporária", overwrites=overwrites)
         await interaction.response.send_message(f"🔊 Canal de voz criado: {voice_channel.mention}")
 
-# Mantém o bot vivo no Render
-keep_alive()
-
-# Inicia o bot
 bot.run(DISCORD_TOKEN)
